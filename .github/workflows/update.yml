@@ -1,0 +1,87 @@
+name: Weekly US Trader Update
+
+on:
+  schedule:
+    # 매주 화요일 06:00 UTC (한국 화요일 오후 3시, 서머타임 무관)
+    - cron: '0 6 * * 2'
+  workflow_dispatch:
+    inputs:
+      deposit:
+        description: '예수금 (기본값 0)'
+        required: false
+        default: '0'
+      cash_ratio:
+        description: '현금비율 0.0~1.0 (기본값 0)'
+        required: false
+        default: '0'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── A-1: 데이터 수집 + 지표 계산 ──────────────────────────────
+      # ${{ }} 표현식을 쉘에 직접 삽입하지 않고 env로 전달 (injection 방지)
+      - name: Fetch data & calculate
+        env:
+          INPUT_DEPOSIT: ${{ github.event.inputs.deposit || '0' }}
+          INPUT_CASH_RATIO: ${{ github.event.inputs.cash_ratio || '0' }}
+        run: |
+          python scripts/fetch_and_calc.py \
+            --deposit "$INPUT_DEPOSIT" \
+            --cash-ratio "$INPUT_CASH_RATIO"
+
+      # ── A-2: 텔레그램 주간 알림 ───────────────────────────────────
+      - name: Send Telegram notification
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python scripts/notify.py
+
+      # ── 히스토리 인덱스 생성 (B-5 대시보드용) ────────────────────
+      - name: Generate history index
+        working-directory: docs/data
+        run: |
+          python3 - <<'EOF'
+          import glob, json
+          files = sorted(glob.glob("data_????-W??.json"))
+          with open("history_index.json", "w") as f:
+              json.dump(files, f)
+          print(f"[OK] history_index.json: {len(files)}개 파일")
+          EOF
+
+      # ── docs/ 커밋 & 푸시 ─────────────────────────────────────────
+      - name: Commit and push updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/data/
+          # 변경사항이 없으면 커밋 건너뜀
+          if git diff --cached --quiet; then
+            echo "[SKIP] 변경사항 없음"
+          else
+            WEEK=$(python3 -c "
+          from datetime import datetime, timezone
+          now = datetime.now(timezone.utc)
+          y, w, _ = now.isocalendar()
+          print(f'{y}-W{w:02d}')
+          ")
+            git commit -m "data: weekly update ${WEEK}"
+            git push
+            echo "[OK] 푸시 완료"
+          fi

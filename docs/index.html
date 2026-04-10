@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Weekly US Trader</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* ── 토큰 ───────────────────────────────────────────────────── */
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --surface2:  #1c2128;
+      --border:    #30363d;
+      --text:      #c9d1d9;
+      --muted:     #8b949e;
+      --accent:    #58a6ff;
+      --pos:       #3fb950;
+      --neg:       #f85149;
+      --warn:      #d29922;
+      --radius:    8px;
+      --font-mono: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    }
+
+    /* ── 리셋 / 기본 ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    h2 { font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 16px; }
+
+    /* ── 내비게이션 ──────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 2px;
+      padding: 0 16px;
+      overflow-x: auto;
+    }
+    nav a {
+      display: inline-block;
+      padding: 12px 16px;
+      color: var(--muted);
+      font-size: 13px;
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      transition: color .15s, border-color .15s;
+    }
+    nav a:hover { color: var(--text); }
+    nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── 헤더 ────────────────────────────────────────────────────── */
+    header {
+      padding: 28px 24px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 1.4rem; font-weight: 700; }
+    header .meta {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-family: var(--font-mono);
+    }
+
+    /* ── 섹션 ────────────────────────────────────────────────────── */
+    section {
+      padding: 28px 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    section:last-child { border-bottom: none; }
+
+    /* ── 경고 배너 ────────────────────────────────────────────────── */
+    #warnings-box { display: none; margin-bottom: 20px; }
+    .warn-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(210,153,34,.12);
+      border: 1px solid rgba(210,153,34,.3);
+      border-radius: var(--radius);
+      padding: 8px 14px;
+      margin-bottom: 6px;
+      color: var(--warn);
+      font-size: 13px;
+    }
+
+    /* ── 테이블 공통 ─────────────────────────────────────────────── */
+    .tbl-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+    thead th {
+      background: var(--surface2);
+      color: var(--muted);
+      font-weight: 500;
+      padding: 10px 14px;
+      text-align: right;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+    thead th:first-child { text-align: left; }
+    thead th:hover { color: var(--text); }
+    thead th.sort-asc::after  { content: ' ↑'; color: var(--accent); }
+    thead th.sort-desc::after { content: ' ↓'; color: var(--accent); }
+    tbody tr:hover { background: var(--surface2); }
+    tbody td {
+      padding: 9px 14px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody td:first-child { text-align: left; font-weight: 600; }
+    .pos { color: var(--pos); }
+    .neg { color: var(--neg); }
+    .muted { color: var(--muted); }
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-lever {
+      background: rgba(88,166,255,.15);
+      color: var(--accent);
+    }
+
+    /* ── B-2 차트 ────────────────────────────────────────────────── */
+    .chart-wrap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .chart-wrap canvas { max-height: 340px; }
+
+    /* ── B-3 계산기 ──────────────────────────────────────────────── */
+    .calc-form {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      margin-bottom: 20px;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .field label { font-size: 12px; color: var(--muted); }
+    .field input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 14px;
+      padding: 8px 12px;
+      width: 160px;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .field input:focus { border-color: var(--accent); }
+    .btn-calc {
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius);
+      color: #0d1117;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+      padding: 9px 22px;
+      transition: opacity .15s;
+    }
+    .btn-calc:hover { opacity: .85; }
+    .ratio-hint {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+      padding: 8px 0 4px;
+    }
+    #calc-result { display: none; }
+    .total-row { background: var(--surface2); font-weight: 700; }
+    .total-row td { border-top: 2px solid var(--border); }
+
+    /* ── B-5 히스토리 ────────────────────────────────────────────── */
+    .placeholder {
+      text-align: center;
+      padding: 48px 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* ── 반응형 ──────────────────────────────────────────────────── */
+    @media (max-width: 640px) {
+      section { padding: 20px 14px; }
+      header  { padding: 20px 14px 12px; }
+      nav a   { padding: 10px 12px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── 내비게이션 ──────────────────────────────────────────────── -->
+<nav>
+  <a href="#indicators">📋 지표</a>
+  <a href="#weight-chart">⚖️ 비중</a>
+  <a href="#calculator">🧮 계산기</a>
+  <a href="#comparison">📊 비교표</a>
+  <a href="#history">📈 히스토리</a>
+</nav>
+
+<!-- ── 헤더 ───────────────────────────────────────────────────── -->
+<header>
+  <h1>📊 Weekly US Trader</h1>
+  <div class="meta" id="meta">데이터 로딩 중…</div>
+</header>
+
+<main>
+
+  <!-- ── B-1: 지표 현황 ───────────────────────────────────────── -->
+  <section id="indicators">
+    <h2>📋 지표 현황</h2>
+    <div id="warnings-box"></div>
+    <div class="tbl-wrap">
+      <table id="indicator-table">
+        <thead>
+          <tr>
+            <th data-col="ticker">종목</th>
+            <th data-col="close">Close</th>
+            <th data-col="ema">EMA</th>
+            <th data-col="divergence">Divergence</th>
+            <th data-col="rsi">RSI</th>
+            <th data-col="atr_pct">ATR%</th>
+            <th data-col="rsi_mult">RSI_Mult</th>
+            <th data-col="trend_mult">Trend_Mult</th>
+            <th data-col="weight_pct">Weight%</th>
+            <th data-col="weight_delta">Δ 전주</th>
+          </tr>
+        </thead>
+        <tbody id="indicator-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── B-2: Weight% 바 차트 ─────────────────────────────────── -->
+  <section id="weight-chart">
+    <h2>⚖️ 매수 비중</h2>
+    <div class="chart-wrap">
+      <canvas id="weight-canvas"></canvas>
+    </div>
+  </section>
+
+  <!-- ── B-3: 인터랙티브 계산기 ──────────────────────────────── -->
+  <section id="calculator">
+    <h2>🧮 매수 금액 계산기</h2>
+    <div class="calc-form">
+      <div class="field">
+        <label>예수금 ($)</label>
+        <input type="number" id="inp-deposit" placeholder="예: 2670" min="0" step="1" />
+      </div>
+      <div class="field">
+        <label>현금비율 (%)</label>
+        <input type="number" id="inp-cash" placeholder="예: 28" min="0" max="100" step="1" />
+      </div>
+      <button class="btn-calc" onclick="onCalc()">계산</button>
+    </div>
+    <div class="ratio-hint" id="ratio-hint"></div>
+
+    <!-- B-3 결과 / B-4 비교표 통합 -->
+    <div id="calc-result">
+      <div class="tbl-wrap" style="margin-top:16px">
+        <table id="calc-table">
+          <thead>
+            <tr>
+              <th data-col="ticker">종목</th>
+              <th data-col="weight_pct">비중</th>
+              <th data-col="sys_fund">본주매수</th>
+              <th>레버</th>
+              <th data-col="disc_fund">레버리지매수</th>
+              <th data-col="disc_multiplier">배수</th>
+              <th data-col="lever_price">레버가격</th>
+              <th data-col="total_fund">합계</th>
+            </tr>
+          </thead>
+          <tbody id="calc-body"></tbody>
+          <tfoot id="calc-foot"></tfoot>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── B-4: 본주 vs 레버리지 비교표 (data.json 기준) ─────────── -->
+  <section id="comparison">
+    <h2>📊 본주 vs 레버리지 현황</h2>
+    <div class="tbl-wrap">
+      <table id="comparison-table">
+        <thead>
+          <tr>
+            <th>종목</th>
+            <th>본주가격</th>
+            <th>레버 ETF</th>
+            <th>레버가격</th>
+            <th>Disc배수</th>
+            <th>Divergence</th>
+            <th>RSI</th>
+            <th>Weight%</th>
+          </tr>
+        </thead>
+        <tbody id="comparison-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── B-5: 누적 Weight% 히스토리 ──────────────────────────── -->
+  <section id="history">
+    <h2>📈 Weight% 히스토리</h2>
+    <div class="chart-wrap">
+      <canvas id="history-canvas" style="max-height:420px"></canvas>
+      <div class="placeholder" id="history-placeholder" style="display:none">
+        히스토리 데이터가 아직 없습니다. 매주 화요일 자동 업데이트됩니다.
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+// ── 상수 ────────────────────────────────────────────────────────────────
+const TICKER_ORDER = ['QQQ','NVDA','AAPL','GOOGL','MSFT','AMZN','MSTR','PLTR','TSLA'];
+const TICKER_COLORS = {
+  QQQ:'#58a6ff', NVDA:'#3fb950', AAPL:'#c78ced',
+  GOOGL:'#f6c944', MSFT:'#4d9eff', AMZN:'#ff9f43',
+  MSTR:'#f85149', PLTR:'#48dbfb', TSLA:'#ff6348'
+};
+
+// ── 상태 ─────────────────────────────────────────────────────────────────
+let globalData = null;
+let weightChart = null;
+let historyChart = null;
+let sortState = { col: 'weight_pct', asc: false };
+
+// ── 유틸 ─────────────────────────────────────────────────────────────────
+const fmt  = (v, d=2) => v == null ? '─' : Number(v).toFixed(d);
+const fmtD = (v) => v == null ? '─' : `$${Number(v).toLocaleString('en-US', {minimumFractionDigits:1, maximumFractionDigits:1})}`;
+const fmtP = (v) => v == null ? '─' : `$${Number(v).toLocaleString('en-US', {minimumFractionDigits:2})}`;
+
+function deltaStr(d) {
+  if (d == null) return '<span class="muted">─</span>';
+  if (d > 0.05)  return `<span class="pos">▲${d.toFixed(1)}%</span>`;
+  if (d < -0.05) return `<span class="neg">▼${Math.abs(d).toFixed(1)}%</span>`;
+  return '<span class="muted">─</span>';
+}
+
+function getRatios(cashRatio) {
+  if (cashRatio >= 0.4) return [0.055, 0.080];
+  if (cashRatio >= 0.3) return [0.050, 0.075];
+  if (cashRatio >= 0.2) return [0.045, 0.070];
+  return [0.040, 0.065];
+}
+
+function divClass(v) {
+  if (v > 30) return 'neg';
+  if (v < 0)  return 'pos';
+  return '';
+}
+
+// ── 메타 ─────────────────────────────────────────────────────────────────
+function renderMeta(data) {
+  const d = data.deposit > 0 ? ` | 예수금 $${data.deposit.toLocaleString()}` : '';
+  document.getElementById('meta').textContent =
+    `${data.week}  •  생성: ${data.generated_at}${d}`;
+  document.title = `Weekly US Trader — ${data.week}`;
+}
+
+// ── 경고 배너 ─────────────────────────────────────────────────────────────
+function renderWarnings(data) {
+  const box = document.getElementById('warnings-box');
+  if (!data.warnings || data.warnings.length === 0) return;
+  box.style.display = 'block';
+  box.innerHTML = data.warnings
+    .map(w => `<div class="warn-item">⚠️ ${w}</div>`)
+    .join('');
+}
+
+// ── B-1: 지표 테이블 ────────────────────────────────────────────────────
+function renderIndicatorTable(data) {
+  const tickers = data.tickers;
+  const sorted = sortedEntries(tickers);
+  const tbody = document.getElementById('indicator-body');
+  tbody.innerHTML = sorted.map(([ticker, t]) => `
+    <tr>
+      <td>${ticker}</td>
+      <td>${fmtP(t.close)}</td>
+      <td>${fmtP(t.ema)}</td>
+      <td class="${divClass(t.divergence)}">${fmt(t.divergence, 1)}%</td>
+      <td class="${t.rsi < 40 ? 'pos' : t.rsi >= 70 ? 'neg' : ''}">${fmt(t.rsi, 1)}</td>
+      <td>${fmt(t.atr_pct, 2)}%</td>
+      <td>${fmt(t.rsi_mult, 1)}</td>
+      <td>${fmt(t.trend_mult, 1)}</td>
+      <td><b>${fmt(t.weight_pct, 1)}%</b></td>
+      <td>${deltaStr(t.weight_delta)}</td>
+    </tr>
+  `).join('');
+}
+
+function sortedEntries(tickers) {
+  const entries = Object.entries(tickers);
+  const col = sortState.col;
+  entries.sort(([aT, aV], [bT, bV]) => {
+    const av = col === 'ticker' ? aT : (aV[col] ?? 0);
+    const bv = col === 'ticker' ? bT : (bV[col] ?? 0);
+    if (av < bv) return sortState.asc ? -1 : 1;
+    if (av > bv) return sortState.asc ?  1 : -1;
+    return 0;
+  });
+  return entries;
+}
+
+function setupTableSort() {
+  document.querySelectorAll('#indicator-table thead th').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortState.col === col) {
+        sortState.asc = !sortState.asc;
+      } else {
+        sortState.col = col;
+        sortState.asc = col === 'ticker';
+      }
+      document.querySelectorAll('#indicator-table thead th')
+        .forEach(h => h.classList.remove('sort-asc', 'sort-desc'));
+      th.classList.add(sortState.asc ? 'sort-asc' : 'sort-desc');
+      renderIndicatorTable(globalData);
+    });
+  });
+  // 초기 정렬 표시
+  const initTh = document.querySelector('#indicator-table th[data-col="weight_pct"]');
+  if (initTh) initTh.classList.add('sort-desc');
+}
+
+// ── B-2: Weight% 바 차트 ─────────────────────────────────────────────────
+function renderWeightChart(data) {
+  const tickers = data.tickers;
+  const sorted = Object.entries(tickers)
+    .sort(([, a], [, b]) => b.weight_pct - a.weight_pct);
+
+  const labels = sorted.map(([t]) => t);
+  const values = sorted.map(([, v]) => v.weight_pct);
+  const colors = labels.map(t => TICKER_COLORS[t] || '#8b949e');
+
+  const ctx = document.getElementById('weight-canvas').getContext('2d');
+  if (weightChart) weightChart.destroy();
+
+  weightChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors.map(c => c + '99'),
+        borderColor: colors,
+        borderWidth: 1.5,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.raw.toFixed(2)}%`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#30363d' },
+          ticks: { color: '#8b949e', callback: v => v + '%' }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: '#c9d1d9', font: { family: 'monospace' } }
+        }
+      }
+    }
+  });
+}
+
+// ── B-3 계산기 + B-4 비교표 ──────────────────────────────────────────────
+function onCalc() {
+  const deposit   = parseFloat(document.getElementById('inp-deposit').value);
+  const cashPct   = parseFloat(document.getElementById('inp-cash').value);
+  if (!globalData || isNaN(deposit) || isNaN(cashPct)) return;
+  if (deposit <= 0 || cashPct < 0 || cashPct > 100) return;
+
+  const cashRatio = cashPct / 100;
+  const [sysRatio, discRatio] = getRatios(cashRatio);
+
+  document.getElementById('ratio-hint').textContent =
+    `Systematic ${(sysRatio*100).toFixed(1)}%  /  Discretionary ${(discRatio*100).toFixed(1)}%`;
+
+  const tickers = globalData.tickers;
+  const sorted = Object.entries(tickers)
+    .sort(([, a], [, b]) => b.weight_pct - a.weight_pct);
+
+  let totalSys = 0, totalDisc = 0;
+
+  const rows = sorted.map(([ticker, info]) => {
+    const w  = info.weight_pct;
+    const dm = info.disc_multiplier;
+    const sf = deposit * sysRatio  * (w / 100);
+    const df = deposit * discRatio * (w / 100) * dm;
+    totalSys  += sf;
+    totalDisc += df;
+    const dmStr = dm > 0 ? `×${dm}` : '─';
+    const lp = info.lever_price != null ? `$${info.lever_price.toFixed(2)}` : '─';
+    return `
+      <tr>
+        <td>${ticker}</td>
+        <td>${w.toFixed(1)}%</td>
+        <td>${fmtD(sf)}</td>
+        <td><span class="badge badge-lever">${info.lever}</span></td>
+        <td>${dm > 0 ? fmtD(df) : '<span class="muted">─</span>'}</td>
+        <td class="${dm > 0 ? 'pos' : 'muted'}">${dmStr}</td>
+        <td class="muted">${lp}</td>
+        <td><b>${fmtD(sf + df)}</b></td>
+      </tr>`;
+  }).join('');
+
+  document.getElementById('calc-body').innerHTML = rows;
+  document.getElementById('calc-foot').innerHTML = `
+    <tr class="total-row">
+      <td colspan="2">합계</td>
+      <td>${fmtD(totalSys)}</td>
+      <td></td>
+      <td>${fmtD(totalDisc)}</td>
+      <td></td>
+      <td></td>
+      <td><b>${fmtD(totalSys + totalDisc)}</b></td>
+    </tr>`;
+
+  document.getElementById('calc-result').style.display = 'block';
+}
+
+// Enter 키 지원
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' &&
+      (document.activeElement.id === 'inp-deposit' ||
+       document.activeElement.id === 'inp-cash')) {
+    onCalc();
+  }
+});
+
+// ── B-4: 비교 테이블 ─────────────────────────────────────────────────────
+function renderComparisonTable(data) {
+  const tickers = data.tickers;
+  const sorted = Object.entries(tickers)
+    .sort(([, a], [, b]) => b.weight_pct - a.weight_pct);
+
+  document.getElementById('comparison-body').innerHTML = sorted.map(([ticker, t]) => {
+    const lp = t.lever_price != null ? `$${t.lever_price.toFixed(2)}` : '─';
+    const dmStr = t.disc_multiplier > 0
+      ? `<span class="pos">×${t.disc_multiplier}</span>`
+      : '<span class="muted">─</span>';
+    return `
+      <tr>
+        <td>${ticker}</td>
+        <td>${fmtP(t.close)}</td>
+        <td><span class="badge badge-lever">${t.lever}</span></td>
+        <td class="muted">${lp}</td>
+        <td>${dmStr}</td>
+        <td class="${divClass(t.divergence)}">${fmt(t.divergence, 1)}%</td>
+        <td class="${t.rsi < 40 ? 'pos' : t.rsi >= 70 ? 'neg' : ''}">${fmt(t.rsi, 1)}</td>
+        <td><b>${fmt(t.weight_pct, 1)}%</b></td>
+      </tr>`;
+  }).join('');
+}
+
+// ── B-5: 히스토리 차트 ───────────────────────────────────────────────────
+async function loadHistory() {
+  try {
+    const idxRes = await fetch('data/history_index.json');
+    if (!idxRes.ok) throw new Error('index not found');
+    const files = await idxRes.json();
+    if (!files || files.length === 0) throw new Error('no files');
+
+    const histList = await Promise.all(
+      files.map(f =>
+        fetch(`data/${f}`)
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null)
+      )
+    );
+
+    const valid = histList.filter(Boolean);
+    if (valid.length === 0) throw new Error('all failed');
+
+    renderHistoryChart(valid);
+  } catch {
+    document.getElementById('history-placeholder').style.display = 'block';
+    document.getElementById('history-canvas').style.display = 'none';
+  }
+}
+
+function renderHistoryChart(histList) {
+  const labels = histList.map(d => d.week);
+
+  // 등장한 모든 티커 수집 (순서 고정)
+  const tickerSet = new Set();
+  histList.forEach(d => Object.keys(d.tickers).forEach(t => tickerSet.add(t)));
+  const tickers = TICKER_ORDER.filter(t => tickerSet.has(t));
+
+  const datasets = tickers.map(ticker => ({
+    label: ticker,
+    data: histList.map(d => d.tickers[ticker]?.weight_pct ?? null),
+    borderColor: TICKER_COLORS[ticker] || '#8b949e',
+    backgroundColor: (TICKER_COLORS[ticker] || '#8b949e') + '22',
+    borderWidth: 2,
+    pointRadius: 3,
+    spanGaps: false,
+    tension: 0.3,
+  }));
+
+  const ctx = document.getElementById('history-canvas').getContext('2d');
+  if (historyChart) historyChart.destroy();
+
+  historyChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#8b949e', font: { family: 'monospace', size: 12 } }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.dataset.label}: ${ctx.raw?.toFixed(1) ?? '─'}%`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: '#21262d' },
+          ticks: { color: '#8b949e', font: { family: 'monospace', size: 11 } }
+        },
+        y: {
+          grid: { color: '#21262d' },
+          ticks: { color: '#8b949e', callback: v => v + '%' }
+        }
+      }
+    }
+  });
+}
+
+// ── 내비게이션 active 처리 ────────────────────────────────────────────────
+function setupNavHighlight() {
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('nav a');
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const link = document.querySelector(`nav a[href="#${entry.target.id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { threshold: 0.4 });
+
+  sections.forEach(s => observer.observe(s));
+}
+
+// ── 진입점 ───────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const res = await fetch('data/data.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    globalData = await res.json();
+
+    renderMeta(globalData);
+    renderWarnings(globalData);
+    renderIndicatorTable(globalData);
+    renderWeightChart(globalData);
+    renderComparisonTable(globalData);
+    setupTableSort();
+    setupNavHighlight();
+
+    // data.json에 이미 deposit이 있으면 계산기 초기값 세팅
+    if (globalData.deposit > 0) {
+      document.getElementById('inp-deposit').value = globalData.deposit;
+      document.getElementById('inp-cash').value =
+        (globalData.cash_ratio * 100).toFixed(0);
+    }
+  } catch (err) {
+    document.getElementById('meta').textContent =
+      '⚠️ data.json 로드 실패 — GitHub Actions 첫 실행 후 데이터가 생성됩니다.';
+    console.error(err);
+  }
+
+  loadHistory(); // B-5 (비동기, 실패해도 무관)
+}
+
+init();
+</script>
+</body>
+</html>
