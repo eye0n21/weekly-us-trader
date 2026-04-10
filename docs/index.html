@@ -704,12 +704,12 @@ async function init() {
     setupTableSort();
     setupNavHighlight();
 
-    // data.json에 이미 deposit이 있으면 계산기 초기값 세팅
-    if (globalData.deposit > 0) {
-      document.getElementById('inp-deposit').value = globalData.deposit;
-      document.getElementById('inp-cash').value =
-        (globalData.cash_ratio * 100).toFixed(0);
-    }
+    // 계산기 초기값: data.json 우선, 없으면 기본값(200000 / 0%)
+    const initDeposit = globalData.deposit > 0 ? globalData.deposit : 200000;
+    const initCash    = globalData.deposit > 0 ? (globalData.cash_ratio * 100).toFixed(0) : '0';
+    document.getElementById('inp-deposit').value = initDeposit;
+    document.getElementById('inp-cash').value    = initCash;
+    onCalc(); // 페이지 로드 시 자동 계산
   } catch (err) {
     document.getElementById('meta').textContent =
       '⚠️ data.json 로드 실패 — GitHub Actions 첫 실행 후 데이터가 생성됩니다.';
