@@ -7,19 +7,13 @@ notify.py
   TELEGRAM_CHAT_ID    수신 채팅 ID
 """
 
-import json
 import os
 import sys
-from pathlib import Path
 from typing import Optional
 
 import requests
 
-# ---------------------------------------------------------------------------
-# Paths
-# ---------------------------------------------------------------------------
-
-DATA_JSON = Path(__file__).parent.parent / "docs" / "data" / "data.json"
+from shared import DATA_JSON, load_data as _load_data
 
 # ---------------------------------------------------------------------------
 # Telegram
@@ -56,7 +50,7 @@ def send_message(token: str, chat_id: str, text: str) -> None:
 # Message builder
 # ---------------------------------------------------------------------------
 
-SEP = "━" * 22
+SEP = "━" * 22  # 3열 테이블(종목·비중·전주대비) 너비
 
 
 def _delta_str(delta: float) -> str:
@@ -125,20 +119,13 @@ def build_message(data: dict) -> str:
 # Entry point
 # ---------------------------------------------------------------------------
 
-def load_data() -> Optional[dict]:
-    if not DATA_JSON.exists():
-        print(f"[ERROR] {DATA_JSON} 파일이 없습니다. fetch_and_calc.py를 먼저 실행하세요.", file=sys.stderr)
-        return None
-    with DATA_JSON.open(encoding="utf-8") as f:
-        return json.load(f)
-
-
 def main() -> None:
     token = _get_env("TELEGRAM_BOT_TOKEN")
     chat_id = _get_env("TELEGRAM_CHAT_ID")
 
-    data = load_data()
+    data = _load_data()
     if data is None:
+        print(f"[ERROR] {DATA_JSON} 파일이 없습니다. fetch_and_calc.py를 먼저 실행하세요.", file=sys.stderr)
         sys.exit(1)
 
     message = build_message(data)

@@ -225,11 +225,13 @@ class TestComputeRsi:
 class TestComputeAtr:
     """ATR 값 범위 검증"""
 
+    N_WEEKS = 30  # 테스트용 공통 기간
+
     def _make_df(self, high, low, close):
         return pd.DataFrame({"High": high, "Low": low, "Close": close})
 
     def test_atr_is_positive(self):
-        n = 30
+        n = self.N_WEEKS
         df = self._make_df(
             high  = [110.0] * n,
             low   = [90.0]  * n,
@@ -240,7 +242,7 @@ class TestComputeAtr:
 
     def test_zero_range_atr_near_zero(self):
         # High == Low == Close → TR 이 0에 가까움
-        n = 30
+        n = self.N_WEEKS
         df = self._make_df(
             high  = [100.0] * n,
             low   = [100.0] * n,
@@ -251,9 +253,9 @@ class TestComputeAtr:
 
     def test_atr_reflects_volatility(self):
         # 변동성 큰 쪽이 ATR 더 높아야 함
-        n = 30
-        low_vol = self._make_df([101.0]*n, [99.0]*n, [100.0]*n)
-        high_vol = self._make_df([120.0]*n, [80.0]*n, [100.0]*n)
+        n = self.N_WEEKS
+        low_vol  = self._make_df([101.0]*n, [99.0]*n,  [100.0]*n)
+        high_vol = self._make_df([120.0]*n, [80.0]*n,  [100.0]*n)
         assert compute_atr(high_vol) > compute_atr(low_vol)
 
 

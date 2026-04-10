@@ -10,22 +10,15 @@ bot.py
   TELEGRAM_CHAT_ID    허용할 채팅 ID (보안용, 비워두면 전체 허용)
 """
 
-import json
 import logging
 import os
 import sys
-from pathlib import Path
 from typing import Optional
 
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# ---------------------------------------------------------------------------
-# 경로 설정
-# ---------------------------------------------------------------------------
-
-ROOT = Path(__file__).parent.parent
-DATA_JSON = ROOT / "docs" / "data" / "data.json"
+from shared import DATA_JSON, get_ratios, load_data
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -33,35 +26,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# 4열 테이블(종목·비중·본주매수·레버리지매수) 너비
 SEP = "━" * 34
-
-# ---------------------------------------------------------------------------
-# 계산 헬퍼 (fetch_and_calc.py 와 동일 로직, 의존성 없이 자립)
-# ---------------------------------------------------------------------------
-
-def get_ratios(cash_ratio: float):
-    if cash_ratio >= 0.4:
-        return 0.055, 0.080
-    elif cash_ratio >= 0.3:
-        return 0.050, 0.075
-    elif cash_ratio >= 0.2:
-        return 0.045, 0.070
-    else:
-        return 0.040, 0.065
-
-
-# ---------------------------------------------------------------------------
-# 데이터 로딩
-# ---------------------------------------------------------------------------
-
-def load_data() -> Optional[dict]:
-    if not DATA_JSON.exists():
-        return None
-    try:
-        with DATA_JSON.open(encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return None
 
 
 # ---------------------------------------------------------------------------
