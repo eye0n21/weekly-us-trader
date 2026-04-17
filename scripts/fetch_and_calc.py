@@ -188,6 +188,7 @@ def run(deposit: float = 0.0, cash_ratio: float = 0.0) -> dict:
             continue
 
         close   = df["Close"]
+        print(f"[DEBUG] {base} 마지막 주봉 날짜: {df.index[-1].date()}")
         ema_val = compute_ema(close)
         rsi_val = compute_rsi(close)
         atr_val = compute_atr(df)
